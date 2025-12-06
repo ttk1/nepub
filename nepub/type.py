@@ -38,6 +38,7 @@ class MetadataEpisode(TypedDict):
 
 class Metadata(TypedDict):
     novel_id: str
+    kakuyomu: bool
     illustration: bool
     tcy: bool
     episodes: Dict[str, MetadataEpisode]

@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-from nepub.parser import NarouEpisodeParser, NarouIndexParser
+from nepub.parser.narou import NarouEpisodeParser, NarouIndexParser
 
 
 class TestNarouEpisodeParser(TestCase):
@@ -48,7 +48,7 @@ class TestNarouEpisodeParser(TestCase):
             parser.paragraphs,
         )
 
-    @patch("nepub.parser.get_image")
+    @patch("nepub.parser.narou.get_image")
     def test_narou_episode_parser_image(self, get_image):
         get_image.return_value = {
             "id": "test_id",

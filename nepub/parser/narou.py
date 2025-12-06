@@ -5,36 +5,16 @@ from typing import List
 
 from nepub.http import get_image
 from nepub.type import Chapter, Image
-from nepub.util import half_to_full
-
-PARAGRAPH_ID_PATTERN = re.compile(r"L[1-9][0-9]*")
-IMG_SRC_PATTERN = re.compile(
-    r"//[1-9][0-9]*.mitemin.net/userpageimage/viewimagebig/icode/i[1-9][0-9]*/"
-)
-NEXT_PAGE_PATTERN = re.compile(r"/[a-z0-9]+/\?p=([1-9][0-9]*)")
-EPISODE_ID_PATTERN = re.compile(r"/[a-z0-9]+/([1-9][0-9]*)/")
-TCY_2_DIGITS_PATTERN = re.compile(r"(?<![\x00-\x7F])[0-9]{2}(?![\x00-\x7F])")
-TCY_HALF_CHAR_PATTERN = re.compile(r"(?<![\x00-\x7F])[a-zA-Z0-9.,!?%]+(?![\x00-\x7F])")
-
-
-def tcy(text: str):
-    text = TCY_2_DIGITS_PATTERN.sub(r'<span class="tcy">\g<0></span>', text)
-    text = TCY_HALF_CHAR_PATTERN.sub(
-        lambda m: "".join(half_to_full(c) for c in m.group(0)), text
-    )
-    # ダブルクオートを爪括弧に変換
-    text = text.replace("“", "〝").replace("”", "〟")
-    # 連続する感嘆符・疑問符
-    text = (
-        text.replace("！？", '<span class="tcy">⁉</span>')
-        .replace("？！", '<span class="tcy">⁈</span>')
-        .replace("！！", '<span class="tcy">‼</span>')
-        .replace("？？", '<span class="tcy">⁇</span>')
-    )
-    return text
+from nepub.util import tcy
 
 
 class NarouEpisodeParser(HTMLParser):
+    PARAGRAPH_ID_PATTERN = re.compile(r"L[1-9][0-9]*")
+    IMG_SRC_PATTERN = re.compile(
+        r"//[1-9][0-9]*.mitemin.net/userpageimage/viewimagebig/icode/i[1-9][0-9]*/"
+    )
+    EPISODE_TITLE_CLASS = "p-novel__title"
+
     def __init__(self, include_images=False, convert_tcy=False):
         super().__init__()
         self.include_images = include_images
@@ -77,7 +57,7 @@ class NarouEpisodeParser(HTMLParser):
             if attr[0] == "class":
                 self._classes_stack[-1] = attr[1].split()
         # paragraph_flg
-        if self._id_stack[-1] is not None and PARAGRAPH_ID_PATTERN.fullmatch(
+        if self._id_stack[-1] is not None and self.PARAGRAPH_ID_PATTERN.fullmatch(
             self._id_stack[-1]
         ):
             self._paragraph_flg = True
@@ -95,7 +75,7 @@ class NarouEpisodeParser(HTMLParser):
                     if attr[0] == "alt":
                         img_alt = html.escape(attr[1])
                     elif attr[0] == "src":
-                        if not IMG_SRC_PATTERN.fullmatch(attr[1]):
+                        if not self.IMG_SRC_PATTERN.fullmatch(attr[1]):
                             raise Exception(f"img_src が想定しない形式です: {attr[1]}")
                         img_src = attr[1]
                 if img_src:
@@ -133,7 +113,7 @@ class NarouEpisodeParser(HTMLParser):
                         self.paragraphs.append("<br />")
                 self._current_paragraph = ""
         # paragraph_flg
-        if self._id_stack[-1] is not None and PARAGRAPH_ID_PATTERN.fullmatch(
+        if self._id_stack[-1] is not None and self.PARAGRAPH_ID_PATTERN.fullmatch(
             self._id_stack[-1]
         ):
             self._paragraph_flg = False
@@ -150,12 +130,15 @@ class NarouEpisodeParser(HTMLParser):
         # title
         if (
             self._classes_stack[-1] is not None
-            and "p-novel__title" in self._classes_stack[-1]
+            and self.EPISODE_TITLE_CLASS in self._classes_stack[-1]
         ):
             self._title += data
 
 
 class NarouIndexParser(HTMLParser):
+    NEXT_PAGE_PATTERN = re.compile(r"/[a-z0-9]+/\?p=([1-9][0-9]*)")
+    EPISODE_ID_PATTERN = re.compile(r"/[a-z0-9]+/([1-9][0-9]*)/")
+
     def reset(self):
         super().reset()
         self._title = ""
@@ -187,7 +170,7 @@ class NarouIndexParser(HTMLParser):
         ):
             for attr in attrs:
                 if attr[0] == "href":
-                    m = NEXT_PAGE_PATTERN.fullmatch(attr[1])
+                    m = self.NEXT_PAGE_PATTERN.fullmatch(attr[1])
                     if not m:
                         raise Exception(f"next_page が認識できませんでした: {attr[1]}")
                     self.next_page = m.group(1)
@@ -198,7 +181,7 @@ class NarouIndexParser(HTMLParser):
         ):
             for attr in attrs:
                 if attr[0] == "href":
-                    m = EPISODE_ID_PATTERN.fullmatch(attr[1])
+                    m = self.EPISODE_ID_PATTERN.fullmatch(attr[1])
                     if not m:
                         raise Exception(f"episode_id が認識できませんでした: {attr[1]}")
                     self.chapters[-1]["episodes"].append(

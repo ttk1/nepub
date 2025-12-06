@@ -9,16 +9,20 @@ from typing import List
 
 from nepub.epub import container, content, nav, style, text
 from nepub.http import get
-from nepub.parser import NarouEpisodeParser, NarouIndexParser
+from nepub.parser.kakuyomu import KakuyomuEpisodeParser, KakuyomuIndexParser
+from nepub.parser.narou import NarouEpisodeParser, NarouIndexParser
 from nepub.type import Episode, Image, Metadata, MetadataImage
-from nepub.util import range_to_episode_ids
+from nepub.util import range_to_episode_nums
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("novel_id", help="novel id", type=str)
     parser.add_argument(
-        "-i", "--illustration", help="Include illustrations", action="store_true"
+        "-i",
+        "--illustration",
+        help="Include illustrations (Narou only)",
+        action="store_true",
     )
     parser.add_argument(
         "-t", "--tcy", help="Enable Tate-Chu-Yoko conversion", action="store_true"
@@ -27,7 +31,7 @@ def main():
         "-r",
         "--range",
         metavar="<range>",
-        help='Specify the target episode id range using comma-separated values (e.g., "1,2,3") or a range notation (e.g., "10-20").',
+        help='Specify the target episode number range using comma-separated values (e.g., "1,2,3") or a range notation (e.g., "10-20").',
         type=str,
     )
     parser.add_argument(
@@ -37,27 +41,69 @@ def main():
         help="Output file name. If not specified, ${novel_id}.epub is used. Update the file if it exists.",
         type=str,
     )
+    parser.add_argument(
+        "-k", "--kakuyomu", help="Use Kakuyomu as the source", action="store_true"
+    )
     args = parser.parse_args()
     if args.output:
         output = args.output
     else:
         output = f"{args.novel_id}.epub"
     convert_narou_to_epub(
-        args.novel_id, args.illustration, args.tcy, args.range, output
+        args.novel_id, args.illustration, args.tcy, args.range, output, args.kakuyomu
     )
+
+
+def get_index_parser(kakuyomu: bool):
+    if kakuyomu:
+        return KakuyomuIndexParser()
+    else:
+        return NarouIndexParser()
+
+
+def get_episode_parser(illustration: bool, tcy: bool, kakuyomu: bool):
+    if kakuyomu:
+        return KakuyomuEpisodeParser(tcy)
+    else:
+        return NarouEpisodeParser(illustration, tcy)
+
+
+def get_index_page_url(novel_id: str, page: int, kakuyomu: bool):
+    if kakuyomu:
+        return f"https://kakuyomu.jp/works/{novel_id}"
+    else:
+        return f"https://ncode.syosetu.com/{novel_id}/?p={page}"
+
+
+def get_episode_page_url(novel_id: str, episode_id: str, kakuyomu: bool):
+    if kakuyomu:
+        return f"https://kakuyomu.jp/works/{novel_id}/episodes/{episode_id}"
+    else:
+        return f"https://ncode.syosetu.com/{novel_id}/{episode_id}/"
 
 
 def convert_narou_to_epub(
-    novel_id: str, illustration: bool, tcy: bool, my_range: str, output: str
+    novel_id: str,
+    illustration: bool,
+    tcy: bool,
+    my_range: str,
+    output: str,
+    kakuyomu: bool,
 ):
     print(
-        f"novel_id: {novel_id}, illustration: {illustration}, tcy: {tcy}, output: {output}"
+        f"novel_id: {novel_id}, illustration: {illustration}, tcy: {tcy}, output: {output}, kakuyomu: {kakuyomu}"
     )
+
+    # kakuyomu で illustration が指定されていたら処理を中止する
+    if kakuyomu and illustration:
+        print("Process stopped as illustration option is not supported for Kakuyomu.")
+        return
 
     # metadata
     metadata: Metadata | None = None
     new_metadata: Metadata = {
         "novel_id": novel_id,
+        "kakuyomu": kakuyomu,
         "illustration": illustration,
         "tcy": tcy,
         "episodes": {},
@@ -73,6 +119,14 @@ def convert_narou_to_epub(
         # metadata の novel_id と値が異なる場合処理を中止する
         print(
             f"Process stopped as the novel_id differs from metadata: {metadata['novel_id']}"
+        )
+        return
+
+    # check kakuyomu flag
+    if metadata and metadata.get("kakuyomu", False) != kakuyomu:
+        # metadata の kakuyomu フラグと値が異なる場合処理を中止する
+        print(
+            f"Process stopped as the kakuyomu value differs from metadata: {metadata.get('kakuyomu', False)}"
         )
         return
 
@@ -92,13 +146,13 @@ def convert_narou_to_epub(
         )
         return
 
-    target_episode_ids: set[str] | None = None
+    target_episode_nums: set[str] | None = None
     if my_range:
-        target_episode_ids = range_to_episode_ids(my_range)
+        target_episode_nums = range_to_episode_nums(my_range)
 
     # index
-    index_parser = NarouIndexParser()
-    index_parser.feed(get(f"https://ncode.syosetu.com/{novel_id}/"))
+    index_parser = get_index_parser(kakuyomu)
+    index_parser.feed(get(get_index_page_url(novel_id, 1, kakuyomu)))
     title = index_parser.title
     author = index_parser.author
     next_page = index_parser.next_page
@@ -107,7 +161,7 @@ def convert_narou_to_epub(
     while next_page is not None:
         index_parser.reset()
         index_parser.chapters = chapters
-        index_parser.feed(get(f"https://ncode.syosetu.com/{novel_id}/?p={next_page}"))
+        index_parser.feed(get(get_index_page_url(novel_id, next_page, kakuyomu)))
         chapters = index_parser.chapters
         next_page = index_parser.next_page
         # 負荷かけないようにちょっと待つ
@@ -119,7 +173,7 @@ def convert_narou_to_epub(
     episodes: List[Episode] = []
     images: List[Image] = []
     metadata_images: List[MetadataImage] = []
-    episode_parser = NarouEpisodeParser(illustration, tcy)
+    episode_parser = get_episode_parser(illustration, tcy, kakuyomu)
     for chapter in chapters:
         for episode in chapter["episodes"]:
             episodes.append(episode)
@@ -131,14 +185,14 @@ def convert_narou_to_epub(
     print("Start downloading...")
 
     ignored_episode_ids: list[str] = []
-    for i, episode in enumerate(episodes):
+    for num, episode in enumerate(episodes):
         if metadata:
             if episode["id"] in metadata["episodes"]:
                 metadata_episode = metadata["episodes"][episode["id"]]
                 if metadata_episode["id"] == episode["id"]:
                     if (
-                        target_episode_ids is not None
-                        and episode["id"] not in target_episode_ids
+                        target_episode_nums is not None
+                        and str(num + 1) not in target_episode_nums
                     ):
                         # 取得対象外で既存のファイルに存在しているエピソードはそのまま取り出す
                         episode["title"] = metadata_episode["title"]
@@ -154,17 +208,17 @@ def convert_narou_to_epub(
                         metadata_images += metadata_episode["images"]
                         skipped_count += 1
                         print(
-                            f"Download skipped (already up to date) ({i + 1}/{len(episodes)}): https://ncode.syosetu.com/{novel_id}/{episode['id']}/"
+                            f"Download skipped (already up to date) ({num + 1}/{len(episodes)}): {get_episode_page_url(novel_id, episode['id'], kakuyomu)}"
                         )
                         continue
-        if target_episode_ids is not None and episode["id"] not in target_episode_ids:
+        if target_episode_nums is not None and str(num + 1) not in target_episode_nums:
             ignored_episode_ids.append(episode["id"])
             continue
         print(
-            f"Downloading ({i + 1}/{len(episodes)}): https://ncode.syosetu.com/{novel_id}/{episode['id']}/"
+            f"Downloading ({num + 1}/{len(episodes)}): {get_episode_page_url(novel_id, episode['id'], kakuyomu)}"
         )
         episode_parser.feed(
-            get(f"https://ncode.syosetu.com/{novel_id}/{episode['id']}/")
+            get(get_episode_page_url(novel_id, episode["id"], kakuyomu))
         )
         downloaded_count += 1
         episode["title"] = episode_parser.title

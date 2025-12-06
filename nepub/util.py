@@ -75,11 +75,32 @@ def half_to_full(c: str):
     }[c]
 
 
-def range_to_episode_ids(my_range: str):
+TCY_2_DIGITS_PATTERN = re.compile(r"(?<![\x00-\x7F])[0-9]{2}(?![\x00-\x7F])")
+TCY_HALF_CHAR_PATTERN = re.compile(r"(?<![\x00-\x7F])[a-zA-Z0-9.,!?%]+(?![\x00-\x7F])")
+
+
+def tcy(text: str):
+    text = TCY_2_DIGITS_PATTERN.sub(r'<span class="tcy">\g<0></span>', text)
+    text = TCY_HALF_CHAR_PATTERN.sub(
+        lambda m: "".join(half_to_full(c) for c in m.group(0)), text
+    )
+    # ダブルクオートを爪括弧に変換
+    text = text.replace("“", "〝").replace("”", "〟")
+    # 連続する感嘆符・疑問符
+    text = (
+        text.replace("！？", '<span class="tcy">⁉</span>')
+        .replace("？！", '<span class="tcy">⁈</span>')
+        .replace("！！", '<span class="tcy">‼</span>')
+        .replace("？？", '<span class="tcy">⁇</span>')
+    )
+    return text
+
+
+def range_to_episode_nums(my_range: str):
     my_range = my_range.replace(" ", "")
     if not RANGE_PATTERN.fullmatch(my_range):
         raise Exception(f"range が想定しない形式です: {my_range}")
-    episode_ids: set[str] = set([])
+    episode_nums: set[str] = set([])
     for r in my_range.split(","):
         if "-" in r:
             start, end = r.split("-")
@@ -87,7 +108,7 @@ def range_to_episode_ids(my_range: str):
                 # 安全のため値が大きすぎる場合はエラーにする
                 raise Exception(f"range に含まれる値が大きすぎます: {end}")
             for i in range(int(start), int(end) + 1):
-                episode_ids.add(str(i))
+                episode_nums.add(str(i))
         else:
-            episode_ids.add(r)
-    return episode_ids
+            episode_nums.add(r)
+    return episode_nums
