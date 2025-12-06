@@ -64,6 +64,7 @@ class KakuyomuIndexParser(HTMLParser):
                             "id": html.escape(episode["id"]).strip(),
                             "title": "",
                             "created_at": html.escape(episode["publishedAt"]).strip(),
+                            # 更新日が分からないので作成日と同じ値を入れておく
                             "updated_at": html.escape(episode["publishedAt"]).strip(),
                             "paragraphs": [],
                             "fetched": False,
