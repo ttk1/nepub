@@ -1,4 +1,4 @@
-from typing import Dict, List, TypedDict
+from typing import TypedDict
 
 
 class Episode(TypedDict):
@@ -6,13 +6,13 @@ class Episode(TypedDict):
     title: str
     created_at: str
     updated_at: str
-    paragraphs: List[str]
+    paragraphs: list[str]
     fetched: bool
 
 
 class Chapter(TypedDict):
     name: str
-    episodes: List[Episode]
+    episodes: list[Episode]
 
 
 class Image(TypedDict):
@@ -33,7 +33,7 @@ class MetadataEpisode(TypedDict):
     title: str
     created_at: str
     updated_at: str
-    images: List[MetadataImage]
+    images: list[MetadataImage]
 
 
 class Metadata(TypedDict):
@@ -41,4 +41,4 @@ class Metadata(TypedDict):
     kakuyomu: bool
     illustration: bool
     tcy: bool
-    episodes: Dict[str, MetadataEpisode]
+    episodes: dict[str, MetadataEpisode]

@@ -1,39 +1,43 @@
 import hashlib
 import urllib.request
+from http.client import HTTPResponse
 from importlib.metadata import version
+from typing import cast
 
 from nepub.type import Image
 
 __version__ = version("nepub")
 
+TIMEOUT_SECONDS = 10
+IMAGE_EXTENSIONS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+}
 
-def get(url: str):
-    headers = {"User-agent": f"nepub/{__version__}"}
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=10) as res:
+
+def _open(url: str) -> HTTPResponse:
+    req = urllib.request.Request(url, headers={"User-agent": f"nepub/{__version__}"})
+    # urlopen の戻り値の型は Any だが、http(s) では HTTPResponse が返る
+    return cast(HTTPResponse, urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS))
+
+
+def get(url: str) -> str:
+    with _open(url) as res:
         return res.read().decode("utf-8")
 
 
 def get_image(url: str) -> Image:
-    headers = {"User-agent": f"nepub/{__version__}"}
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with _open(url) as res:
         content_type = res.headers["Content-Type"]
-        img_data = res.read()
-        if content_type == "image/jpeg":
-            img_ext = "jpg"
-        elif content_type == "image/png":
-            img_ext = "png"
-        elif content_type == "image/gif":
-            img_ext = "gif"
-        else:
-            raise Exception(f"対応していない画像の形式です: {content_type}")
-        img_md5 = hashlib.md5(img_data).hexdigest()
-        # MD5 ハッシュ値をファイル名にする
-        img_name = f"{img_md5}.{img_ext}"
-        return {
-            "type": content_type,
-            "id": img_md5,
-            "name": img_name,
-            "data": img_data,
-        }
+        if content_type not in IMAGE_EXTENSIONS:
+            raise ValueError(f"対応していない画像の形式です: {content_type}")
+        data = res.read()
+    # MD5 ハッシュ値をファイル名にする
+    md5 = hashlib.md5(data).hexdigest()
+    return {
+        "type": content_type,
+        "id": md5,
+        "name": f"{md5}.{IMAGE_EXTENSIONS[content_type]}",
+        "data": data,
+    }
