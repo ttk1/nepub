@@ -19,6 +19,8 @@ pip install git+https://github.com/ttk1/nepub.git
 $ nepub -h
 usage: nepub [-h] [-i] [--no-tcy] [-r <range>] [-o <file>] [-k] novel_id
 
+Convert Narou and Kakuyomu novels to vertically written EPUBs.
+
 positional arguments:
   novel_id              novel id
 
