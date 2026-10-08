@@ -14,6 +14,8 @@ class NarouEpisodeParser(HTMLParser):
         r"//[1-9][0-9]*.mitemin.net/userpageimage/viewimagebig/icode/i[1-9][0-9]*/"
     )
     EPISODE_TITLE_CLASS = "p-novel__title"
+    # 終了タグを持たない要素 (<br> のように閉じられない場合があるためスタックに積まない)
+    VOID_TAGS = ("br", "img")
 
     def __init__(self, include_images=False, convert_tcy=False):
         super().__init__()
@@ -31,7 +33,8 @@ class NarouEpisodeParser(HTMLParser):
         self._paragraph_flg = False
         self._current_paragraph = ""
         self._paragraph_buff = ""
-        self._consecutive_blank_paragraphs = 0
+        self._current_paragraph_br_count = 0
+        self._consecutive_blank_lines = 0
 
     @property
     def title(self):
@@ -68,6 +71,9 @@ class NarouEpisodeParser(HTMLParser):
                 self._current_paragraph += "<ruby>"
             elif tag == "rt":
                 self._current_paragraph += "<rt>"
+            elif tag == "br":
+                # 空行判定用に段落内の br の数を数えておく
+                self._current_paragraph_br_count += 1
             elif self.include_images and tag == "img":
                 img_alt = ""
                 img_src = ""
@@ -84,6 +90,11 @@ class NarouEpisodeParser(HTMLParser):
                         f'<img alt="{img_alt.strip()}" src="../image/{image["name"]}"/>'
                     )
                     self.images.append(image)
+        # 終了タグを持たない要素はすぐにスタックからおろす
+        if tag in self.VOID_TAGS:
+            self._tag_stack.pop()
+            self._id_stack.pop()
+            self._classes_stack.pop()
 
     def handle_endtag(self, tag):
         # バッファのデータをエスケープ & 縦中横処理し _current_paragraph に連結
@@ -92,6 +103,9 @@ class NarouEpisodeParser(HTMLParser):
         else:
             self._current_paragraph += html.escape(self._paragraph_buff)
         self._paragraph_buff = ""
+        # 終了タグを持たない要素は開始タグ側で処理済み
+        if tag in self.VOID_TAGS:
+            return
         # ruby, rt, p
         # rb タグは省略する
         if self._paragraph_flg:
@@ -103,15 +117,22 @@ class NarouEpisodeParser(HTMLParser):
                 # 先頭の字下げを残すため rstrip にしている
                 paragraph = self._current_paragraph.rstrip()
                 if paragraph:
-                    self._consecutive_blank_paragraphs = 0
+                    self._consecutive_blank_lines = 0
                     self.paragraphs.append(paragraph)
                 else:
                     # 連続しない空行はそのまま除去
-                    # 2 回以上連続する空行は一つの空行として出力する
-                    self._consecutive_blank_paragraphs += 1
-                    if self._consecutive_blank_paragraphs == 2:
+                    # 2 行以上連続する空行は一つの空行として出力する
+                    # (<p><br><br></p> のように一つの段落に br が複数ある場合も
+                    # br の数だけ空行が連続しているものとみなす。
+                    # br がない空の段落も 1 行とみなす)
+                    was_less_than_two = self._consecutive_blank_lines < 2
+                    self._consecutive_blank_lines += max(
+                        1, self._current_paragraph_br_count
+                    )
+                    if was_less_than_two and self._consecutive_blank_lines >= 2:
                         self.paragraphs.append("<br />")
                 self._current_paragraph = ""
+                self._current_paragraph_br_count = 0
         # paragraph_flg
         if self._id_stack[-1] is not None and self.PARAGRAPH_ID_PATTERN.fullmatch(
             self._id_stack[-1]

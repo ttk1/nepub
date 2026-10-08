@@ -25,6 +25,25 @@ class TestKakuyomuEpisodeParser(TestCase):
             parser.paragraphs,
         )
 
+    def test_kakuyomu_episode_parser_multiple_br(self):
+        parser = KakuyomuEpisodeParser()
+        parser.feed(
+            """
+            <p id="p1">段落1</p>
+            <p id="p2" class="blank"><br></p>
+            <p id="p3">段落3</p>
+            <p id="p4" class="blank"><br><br><br></p>
+            <p id="p5">段落5</p>
+            <p id="p6" class="blank"><br><br></p>
+            <p id="p7" class="blank"><br></p>
+            <p id="p8">段落8</p>
+            """
+        )
+        self.assertEqual(
+            ["段落1", "段落3", "<br />", "段落5", "<br />", "段落8"],
+            parser.paragraphs,
+        )
+
 
 class TestKakuyomuIndexParser(TestCase):
     def test_kakuyomu_index_parser(self):
