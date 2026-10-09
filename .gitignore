@@ -3,3 +3,5 @@ build/
 .vscode/
 *.pyc
 *.epub
+.venv/
+dist/

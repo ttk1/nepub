@@ -1,7 +1,6 @@
 import html
 import re
 from html.parser import HTMLParser
-from typing import List
 
 from nepub.http import get_image
 from nepub.type import Chapter, Image
@@ -25,11 +24,11 @@ class NarouEpisodeParser(HTMLParser):
     def reset(self):
         super().reset()
         self._title = ""
-        self.paragraphs: List[str] = []
-        self.images: List[Image] = []
-        self._tag_stack: List[str | None] = [None, None]
-        self._id_stack: List[str | None] = [None]
-        self._classes_stack: List[List[str] | None] = [None]
+        self.paragraphs: list[str] = []
+        self.images: list[Image] = []
+        self._tag_stack: list[str | None] = [None, None]
+        self._id_stack: list[str | None] = [None]
+        self._classes_stack: list[list[str] | None] = [None]
         self._paragraph_flg = False
         self._current_paragraph = ""
         self._paragraph_buff = ""
@@ -165,8 +164,8 @@ class NarouIndexParser(HTMLParser):
         self._title = ""
         self._author = ""
         self.next_page = None
-        self.chapters: List[Chapter] = [{"name": "default", "episodes": []}]
-        self._classes_stack: List[List[str] | None] = [None, None]
+        self.chapters: list[Chapter] = [{"name": "default", "episodes": []}]
+        self._classes_stack: list[list[str] | None] = [None, None]
         self._current_chapter = ""
         self._current_episode_created_at = ""
 

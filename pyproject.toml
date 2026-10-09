@@ -1,0 +1,46 @@
+[project]
+name = "nepub"
+version = "1.5.0"
+description = "Small tool to convert Narou and Kakuyomu novels to vertically written EPUBs."
+readme = "README.md"
+authors = [{ name = "tama", email = "tama@ttk1.net" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = ["Jinja2>=3.0.0"]
+
+[project.urls]
+Repository = "https://github.com/ttk1/nepub"
+
+[project.scripts]
+nepub = "nepub.__main__:main"
+
+[dependency-groups]
+dev = ["mypy", "ruff"]
+
+[build-system]
+requires = ["uv_build>=0.9.24,<0.10"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.uv]
+# このバージョン以降でないと exclude-newer の相対指定が使えない
+required-version = ">=0.9.17"
+# サプライチェーン対策: 公開から 7 日経っていないパッケージは解決対象にしない
+exclude-newer = "7 days"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+# 行長は ruff format に任せる
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+check_untyped_defs = true

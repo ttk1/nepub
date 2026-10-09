@@ -2,7 +2,6 @@ import html
 import json
 import re
 from html.parser import HTMLParser
-from typing import List
 
 from nepub.parser.narou import NarouEpisodeParser
 from nepub.type import Chapter
@@ -22,7 +21,7 @@ class KakuyomuIndexParser(HTMLParser):
         self.title = ""
         self.author = ""
         self.next_page = None
-        self.chapters: List[Chapter] = [{"name": "default", "episodes": []}]
+        self.chapters: list[Chapter] = [{"name": "default", "episodes": []}]
         self._json_flg = False
         self._buff = ""
 

@@ -5,11 +5,13 @@
 ## Requirements
 
 * Python 3
-  * 3.10 で動作確認しています
+  * 3.11 以降に対応しています
 
 ## Installation
 
 ```sh
+uv tool install git+https://github.com/ttk1/nepub.git
+# または
 pip install git+https://github.com/ttk1/nepub.git
 ```
 
@@ -51,6 +53,19 @@ Updated xxxx.epub.
 ```
 
 ※ xxxx の部分には小説ページの URL の末尾部分 (`https://ncode.syosetu.com/{ここの文字列}/`) に置き換えてください。
+
+## Development
+
+[uv](https://docs.astral.sh/uv/) (0.9.17 以降) を使用します。
+
+```sh
+uv sync --locked                       # uv.lock どおりに環境を構築 (ハッシュ検証あり)
+uv run nepub xxxx                      # 実行
+uv run python -m unittest discover -s test
+uv run mypy nepub test
+uv run ruff check --fix                # lint
+uv run ruff format                     # フォーマット
+```
 
 ## 免責事項
 

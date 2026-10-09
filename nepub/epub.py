@@ -1,5 +1,4 @@
 from importlib import resources
-from typing import List
 
 from jinja2 import Environment, PackageLoader
 
@@ -20,8 +19,8 @@ def content(
     title: str,
     author: str,
     timestamp: str,
-    episodes: List[Episode],
-    images: List[MetadataImage],
+    episodes: list[Episode],
+    images: list[MetadataImage],
 ):
     return template_content.render(
         {
@@ -34,11 +33,11 @@ def content(
     )
 
 
-def nav(chapters: List[Chapter]):
+def nav(chapters: list[Chapter]):
     return template_navigation.render({"chapters": chapters})
 
 
-def text(title: str, paragraphs: List[str]):
+def text(title: str, paragraphs: list[str]):
     return template_text.render({"title": title, "paragraphs": paragraphs})
 
 

@@ -5,7 +5,6 @@ import os
 import tempfile
 import time
 import zipfile
-from typing import List
 
 from nepub.epub import container, content, nav, style, text
 from nepub.http import get
@@ -175,9 +174,9 @@ def convert_narou_to_epub(
     # episode
     downloaded_count = 0
     skipped_count = 0
-    episodes: List[Episode] = []
-    images: List[Image] = []
-    metadata_images: List[MetadataImage] = []
+    episodes: list[Episode] = []
+    images: list[Image] = []
+    metadata_images: list[MetadataImage] = []
     episode_parser = get_episode_parser(illustration, tcy, kakuyomu)
     for chapter in chapters:
         for episode in chapter["episodes"]:
@@ -270,7 +269,7 @@ def convert_narou_to_epub(
             zf_new.writestr(
                 "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
             )
-            unique_images: List[MetadataImage] = []
+            unique_images: list[MetadataImage] = []
             image_md5s = set()
             for image in images:
                 if image["id"] not in image_md5s:
