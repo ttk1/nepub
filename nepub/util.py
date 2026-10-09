@@ -77,9 +77,26 @@ def half_to_full(c: str):
 
 TCY_2_DIGITS_PATTERN = re.compile(r"(?<![\x00-\x7F])[0-9]{2}(?![\x00-\x7F])")
 TCY_HALF_CHAR_PATTERN = re.compile(r"(?<![\x00-\x7F])[a-zA-Z0-9.,!?%]+(?![\x00-\x7F])")
+# 「1 サブタイトル」「第 1 話」のように半角スペース (1 つ以上) を挟んで全角文字が続く数字
+# 前は 行頭 / 全角文字 / 全角文字 + 半角スペース のいずれか (group 1 に入る)
+# (「Chapter 1 開始」のような英文中の数字は対象にしない)
+TCY_DIGITS_BEFORE_SPACE_PATTERN = re.compile(
+    r"(^|[^\x00-\x7F] *)([0-9]+)(?= +[^\x00-\x7F])"
+)
+
+
+def digits_to_tcy(digits: str):
+    """2 桁の数字は縦中横、それ以外の桁数は全角にする"""
+    if len(digits) == 2:
+        return f'<span class="tcy">{digits}</span>'
+    return "".join(half_to_full(c) for c in digits)
 
 
 def tcy(text: str):
+    # 半角スペースはそのまま残し、数字だけを変換する
+    text = TCY_DIGITS_BEFORE_SPACE_PATTERN.sub(
+        lambda m: m.group(1) + digits_to_tcy(m.group(2)), text
+    )
     text = TCY_2_DIGITS_PATTERN.sub(r'<span class="tcy">\g<0></span>', text)
     text = TCY_HALF_CHAR_PATTERN.sub(
         lambda m: "".join(half_to_full(c) for c in m.group(0)), text
