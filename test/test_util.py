@@ -9,11 +9,11 @@ class TestUtil(TestCase):
         self.assertEqual(set(["1", "2", "3"]), range_to_episode_nums("1, 2, 3"))
         self.assertEqual(set(["1", "2", "3"]), range_to_episode_nums("1-3"))
         self.assertEqual(set(["1", "5", "6", "7"]), range_to_episode_nums("1, 5 - 7"))
-        with self.assertRaisesRegex(Exception, "^range が想定しない形式です"):
+        with self.assertRaisesRegex(ValueError, "^invalid range: 1,,2"):
             range_to_episode_nums("1,,2")
-        with self.assertRaisesRegex(Exception, "^range が想定しない形式です"):
+        with self.assertRaisesRegex(ValueError, "^invalid range: 1-"):
             range_to_episode_nums("1-")
-        with self.assertRaisesRegex(Exception, "^range に含まれる値が大きすぎます"):
+        with self.assertRaisesRegex(ValueError, "^range value is too large: 99999"):
             range_to_episode_nums("1-99999")
 
     def test_tcy_digits_before_space(self):

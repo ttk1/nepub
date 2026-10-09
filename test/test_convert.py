@@ -9,7 +9,7 @@ from typing import Any
 from unittest import TestCase
 from unittest.mock import patch
 
-from nepub.convert import convert_to_epub
+from nepub.convert import ConvertError, convert_to_epub
 
 NOVEL_ID = "n0000aa"
 INDEX_URL = f"https://ncode.syosetu.com/{NOVEL_ID}/?p="
@@ -155,16 +155,17 @@ class TestConvert(TestCase):
         )
         self.assertEqual(
             [
-                f"novel_id: {NOVEL_ID}, illustration: False, tcy: False, output: {self.output}, kakuyomu: False",
-                "title: 小説",
-                "author: 作者",
-                "4 episodes found.",
-                "Start downloading...",
-                f"Downloading (1/4): {EPISODE_URL}1/",
-                f"Downloading (2/4): {EPISODE_URL}2/",
-                f"Downloading (3/4): {EPISODE_URL}3/",
-                f"Downloading (4/4): {EPISODE_URL}4/",
-                "Download is complete! (new: 4, skipped: 0)",
+                f"Novel: {NOVEL_ID} (Narou)",
+                f"Output: {self.output} (new file)",
+                "Options: illustrations: off, tcy: off",
+                "Title: 小説",
+                "Author: 作者",
+                "Found 4 episodes.",
+                f"[1/4] Downloading: {EPISODE_URL}1/",
+                f"[2/4] Downloading: {EPISODE_URL}2/",
+                f"[3/4] Downloading: {EPISODE_URL}3/",
+                f"[4/4] Downloading: {EPISODE_URL}4/",
+                "Done: 4 downloaded, 0 skipped (up to date).",
                 f"Created {self.output}.",
             ],
             lines,
@@ -238,18 +239,18 @@ class TestConvert(TestCase):
         )
         self.assertEqual(
             [
-                f"novel_id: {NOVEL_ID}, illustration: False, tcy: False, output: {self.output}, kakuyomu: False",
-                f"{self.output} found. Loading metadata for update.",
-                "title: 小説",
-                "author: 作者",
-                "5 episodes found.",
-                "Start downloading...",
-                f"Download skipped (already up to date) (1/5): {EPISODE_URL}1/",
-                f"Downloading (2/5): {EPISODE_URL}2/",
-                f"Download skipped (already up to date) (3/5): {EPISODE_URL}3/",
-                f"Download skipped (already up to date) (4/5): {EPISODE_URL}4/",
-                f"Downloading (5/5): {EPISODE_URL}5/",
-                "Download is complete! (new: 2, skipped: 3)",
+                f"Novel: {NOVEL_ID} (Narou)",
+                f"Output: {self.output} (updating the existing file)",
+                "Options: illustrations: off, tcy: off",
+                "Title: 小説",
+                "Author: 作者",
+                "Found 5 episodes.",
+                f"[1/5] Skipped (up to date): {EPISODE_URL}1/",
+                f"[2/5] Downloading: {EPISODE_URL}2/",
+                f"[3/5] Skipped (up to date): {EPISODE_URL}3/",
+                f"[4/5] Skipped (up to date): {EPISODE_URL}4/",
+                f"[5/5] Downloading: {EPISODE_URL}5/",
+                "Done: 2 downloaded, 3 skipped (up to date).",
                 f"Updated {self.output}.",
             ],
             lines,
@@ -291,7 +292,7 @@ class TestConvert(TestCase):
         self.assertEqual(
             [INDEX_URL + "1", INDEX_URL + "2", f"{EPISODE_URL}4/"], web.requested
         )
-        self.assertIn("Download is complete! (new: 1, skipped: 0)", lines)
+        self.assertIn("Done: 1 downloaded, 0 skipped (up to date).", lines)
         # [なし・範囲外] 1 話: 引き続き含めない
         self.assertEqual(["2", "3", "4"], self.spine())
         self.assertEqual(["2", "3", "4"], list(self.metadata()["episodes"]))
@@ -308,29 +309,50 @@ class TestConvert(TestCase):
         with open(self.output, "rb") as f:
             before = f.read()
 
+        # 作成時は illustration=False, tcy=False (--no-tcy 相当)
         cases: list[tuple[dict[str, Any], str]] = [
-            ({"novel_id": "n9999zz"}, "the novel_id differs from metadata: n0000aa"),
-            (
-                {"illustration": True},
-                "the illustration value differs from metadata: False",
-            ),
-            ({"tcy": True}, "the tcy value differs from metadata: False"),
+            ({"novel_id": "n9999zz"}, "it contains a different novel (n0000aa)"),
+            ({"illustration": True}, "it was created without --illustration"),
+            ({"tcy": True}, "it was created with --no-tcy"),
         ]
         for kwargs, message in cases:
             with self.subTest(kwargs=kwargs):
-                lines = self.convert(web, **kwargs)
-                self.assertEqual(f"Process stopped as {message}", lines[-1])
+                with self.assertRaises(ConvertError) as cm:
+                    self.convert(web, **kwargs)
+                self.assertIn(
+                    f"cannot update {self.output}: {message}", str(cm.exception)
+                )
                 self.assertEqual([], web.requested)
                 with open(self.output, "rb") as f:
                     self.assertEqual(before, f.read())
 
-    def test_invalid_novel_id(self):
+    def test_not_nepub_epub(self):
+        with zipfile.ZipFile(self.output, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
         web = FakeWeb({})
-        lines = self.convert(web, novel_id="n0000aa/../x")
-        self.assertEqual(
-            "Process stopped as the novel_id is invalid: n0000aa/../x", lines[-1]
-        )
+        with self.assertRaisesRegex(ConvertError, "it is not an EPUB created by nepub"):
+            self.convert(web)
         self.assertEqual([], web.requested)
+
+    def test_invalid_input(self):
+        cases: list[tuple[dict[str, Any], str]] = [
+            ({"novel_id": "n0000aa/../x"}, "invalid novel ID for Narou: n0000aa/../x"),
+            ({"my_range": "1,,2"}, "invalid range: 1,,2"),
+            ({"my_range": "1-99999"}, "range value is too large: 99999"),
+            (
+                {"illustration": True, "kakuyomu": True},
+                "the --illustration option is not supported for Kakuyomu",
+            ),
+        ]
+        for kwargs, message in cases:
+            with self.subTest(kwargs=kwargs):
+                web = FakeWeb({})
+                with self.assertRaises(ConvertError) as cm:
+                    self.convert(web, **kwargs)
+                self.assertIn(message, str(cm.exception))
+                # 入力の誤りは通信やファイル作成の前に検出する
+                self.assertEqual([], web.requested)
+                self.assertFalse(os.path.exists(self.output))
 
     @patch("nepub.parser.narou.get_image")
     def test_unsafe_image_in_metadata(self, get_image):
@@ -384,15 +406,6 @@ class TestConvert(TestCase):
         with zipfile.ZipFile(self.output, "w") as zf:
             for name, data in entries.items():
                 zf.writestr(name, data)
-
-    def test_kakuyomu_with_illustration(self):
-        web = FakeWeb({})
-        lines = self.convert(web, illustration=True, kakuyomu=True)
-        self.assertEqual(
-            "Process stopped as illustration option is not supported for Kakuyomu.",
-            lines[-1],
-        )
-        self.assertFalse(os.path.exists(self.output))
 
     @patch("nepub.parser.narou.get_image")
     def test_illustration(self, get_image):

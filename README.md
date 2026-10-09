@@ -19,36 +19,51 @@ pip install git+https://github.com/ttk1/nepub.git
 
 ```sh
 $ nepub -h
-usage: nepub [-h] [-i] [--no-tcy] [-r <range>] [-o <file>] [-k] novel_id
+usage: nepub [-h] [-k] [-o FILE] [-r RANGE] [-i] [--no-tcy] novel_id
+
+Convert a novel on Shosetsuka ni Narou or Kakuyomu into a vertically written EPUB.
 
 positional arguments:
-  novel_id              novel id
+  novel_id              novel ID: the ncode in the Narou URL
+                        (https://ncode.syosetu.com/<novel_id>/) or the work ID
+                        in the Kakuyomu URL
+                        (https://kakuyomu.jp/works/<novel_id>)
 
 options:
   -h, --help            show this help message and exit
-  -i, --illustration    Include illustrations (Narou only)
-  --no-tcy              Disable Tate-Chu-Yoko conversion
-  -r <range>, --range <range>
-                        Specify the target episode number range using
-                        comma-separated values (e.g., "1,2,3") or a range notation (e.g., "10-20").
-  -o <file>, --output <file>
-                        Output file name. If not specified, ${novel_id}.epub is used.
-                        Update the file if it exists.
-  -k, --kakuyomu        Use Kakuyomu as the source
+  -k, --kakuyomu        download from Kakuyomu
+  -o FILE, --output FILE
+                        output file (default: <novel_id>.epub); if it exists,
+                        it is updated with new and updated episodes
+  -r RANGE, --range RANGE
+                        episode numbers to download, e.g. "1,2,3", "10-20" or
+                        "1,5-7" (default: all episodes)
+  -i, --illustration    include illustrations (Narou only)
+  --no-tcy              disable tate-chu-yoko (upright numbers in vertical
+                        text)
+
+examples:
+  nepub n0000aa                 download all episodes into n0000aa.epub
+  nepub n0000aa -r 1-10         download only episodes 1 to 10
+  nepub -k 1000                 download a novel from Kakuyomu
+
+If the output file already exists, only new and updated episodes are downloaded.
 ```
 
 Example:
 
 ```sh
 $ nepub xxxx
-novel_id: xxxx, illustration: False, tcy: True, output: xxxx.epub, kakuyomu: False
-xxxx.epub found. Loading metadata for update.
-3 episodes found.
-Start downloading...
-Download skipped (already up to date) (1/3): https://ncode.syosetu.com/xxxx/1/
-Download skipped (already up to date) (2/3): https://ncode.syosetu.com/xxxx/2/
-Downloading (3/3): https://ncode.syosetu.com/xxxx/3/
-Download is complete! (new: 1, skipped: 2)
+Novel: xxxx (Narou)
+Output: xxxx.epub (updating the existing file)
+Options: illustrations: off, tcy: on
+Title: タイトル
+Author: 作者
+Found 3 episodes.
+[1/3] Skipped (up to date): https://ncode.syosetu.com/xxxx/1/
+[2/3] Skipped (up to date): https://ncode.syosetu.com/xxxx/2/
+[3/3] Downloading: https://ncode.syosetu.com/xxxx/3/
+Done: 1 downloaded, 2 skipped (up to date).
 Updated xxxx.epub.
 ```
 

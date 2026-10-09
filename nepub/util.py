@@ -116,14 +116,14 @@ def tcy(text: str):
 def range_to_episode_nums(my_range: str):
     my_range = my_range.replace(" ", "")
     if not RANGE_PATTERN.fullmatch(my_range):
-        raise Exception(f"range が想定しない形式です: {my_range}")
+        raise ValueError(f'invalid range: {my_range} (e.g. "1,2,3", "10-20")')
     episode_nums: set[str] = set([])
     for r in my_range.split(","):
         if "-" in r:
             start, end = r.split("-")
             if int(end) > 10_000:
                 # 安全のため値が大きすぎる場合はエラーにする
-                raise Exception(f"range に含まれる値が大きすぎます: {end}")
+                raise ValueError(f"range value is too large: {end} (max: 10000)")
             for i in range(int(start), int(end) + 1):
                 episode_nums.add(str(i))
         else:

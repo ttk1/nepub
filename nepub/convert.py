@@ -1,5 +1,6 @@
 import datetime
 import os
+import zipfile
 from typing import Literal
 
 from nepub.epub import read_metadata, write_epub
@@ -9,11 +10,16 @@ from nepub.type import Chapter, Episode, Image, Metadata, MetadataEpisode
 from nepub.util import range_to_episode_nums
 
 # 既存の EPUB と一致していないと更新できない設定
-METADATA_FLAGS: tuple[Literal["kakuyomu", "illustration", "tcy"], ...] = (
-    "kakuyomu",
-    "illustration",
-    "tcy",
-)
+# metadata のキー -> (対応する CLI オプション, そのオプションを指定したときの値)
+METADATA_OPTIONS: dict[Literal["kakuyomu", "illustration", "tcy"], tuple[str, bool]] = {
+    "kakuyomu": ("--kakuyomu", True),
+    "illustration": ("--illustration", True),
+    "tcy": ("--no-tcy", False),
+}
+
+
+class ConvertError(Exception):
+    """利用者に表示して処理を中止するエラー (入力の誤り等)"""
 
 
 def convert_to_epub(
@@ -31,19 +37,26 @@ def convert_to_epub(
     output が既に存在する場合は、更新されたエピソードだけをダウンロードして更新する。
     fetch はテスト用。省略すると 1 秒間隔で HTTP リクエストを送る。
     """
-    print(
-        f"novel_id: {novel_id}, illustration: {illustration}, tcy: {tcy}, output: {output}, kakuyomu: {kakuyomu}"
-    )
     site = KAKUYOMU if kakuyomu else NAROU
-
     if illustration and not site.supports_illustration:
-        print(
-            f"Process stopped as illustration option is not supported for {site.name}."
+        raise ConvertError(
+            f"the --illustration option is not supported for {site.name}"
         )
-        return
     if not site.novel_id_pattern.fullmatch(novel_id):
-        print(f"Process stopped as the novel_id is invalid: {novel_id}")
-        return
+        raise ConvertError(f"invalid novel ID for {site.name}: {novel_id}")
+    try:
+        target_episode_nums = range_to_episode_nums(my_range) if my_range else None
+    except ValueError as e:
+        raise ConvertError(str(e)) from e
+
+    exists = os.path.exists(output)
+    print(f"Novel: {novel_id} ({site.name})")
+    print(
+        f"Output: {output} ({'updating the existing file' if exists else 'new file'})"
+    )
+    print(
+        f"Options: illustrations: {'on' if illustration else 'off'}, tcy: {'on' if tcy else 'off'}"
+    )
 
     new_metadata: Metadata = {
         "novel_id": novel_id,
@@ -53,17 +66,16 @@ def convert_to_epub(
         "episodes": {},
     }
     old_episodes: dict[str, MetadataEpisode] = {}
-    exists = os.path.exists(output)
     if exists:
-        print(f"{output} found. Loading metadata for update.")
-        old_metadata = read_metadata(output)
-        error = check_metadata(old_metadata, new_metadata)
-        if error:
-            print(f"Process stopped as {error}")
-            return
+        try:
+            old_metadata = read_metadata(output)
+        except (zipfile.BadZipFile, KeyError) as e:
+            raise ConvertError(
+                f"cannot update {output}: it is not an EPUB created by nepub"
+            ) from e
+        check_metadata(old_metadata, new_metadata, output)
         old_episodes = old_metadata["episodes"]
 
-    target_episode_nums = range_to_episode_nums(my_range) if my_range else None
     if fetch is None:
         fetch = throttle(get, interval=1)
 
@@ -71,10 +83,11 @@ def convert_to_epub(
     timestamp = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     episodes = [episode for chapter in chapters for episode in chapter["episodes"]]
 
-    print(f"title: {title}")
-    print(f"author: {author}")
-    print(f"{len(episodes)} episodes found.")
-    print("Start downloading...")
+    print(f"Title: {title}")
+    print(f"Author: {author}")
+    print(f"Found {len(episodes)} episode{'' if len(episodes) == 1 else 's'}.")
+    # 進捗表示の番号の桁をそろえる ([ 1/12] のように)
+    num_width = len(str(len(episodes)))
 
     downloaded_count = 0
     skipped_count = 0
@@ -84,7 +97,7 @@ def convert_to_epub(
         old_episode = old_episodes.get(episode["id"])
         in_range = target_episode_nums is None or str(num) in target_episode_nums
         url = site.episode_url(novel_id, episode["id"])
-        progress = f"({num}/{len(episodes)}): {url}"
+        progress = f"[{num:>{num_width}}/{len(episodes)}]"
 
         if old_episode and (not in_range or not is_updated(episode, old_episode)):
             # 既存の EPUB にあり、取得対象外か更新されていないエピソードはそのまま使う
@@ -92,12 +105,12 @@ def convert_to_epub(
             new_metadata["episodes"][episode["id"]] = old_episode
             if in_range:
                 skipped_count += 1
-                print(f"Download skipped (already up to date) {progress}")
+                print(f"{progress} Skipped (up to date): {url}")
         elif not in_range:
             # 取得対象外で既存の EPUB にもないエピソードは含めない
             ignored_episode_ids.add(episode["id"])
         else:
-            print(f"Downloading {progress}")
+            print(f"{progress} Downloading: {url}")
             parser = site.new_episode_parser(illustration=illustration, tcy=tcy)
             parser.feed(fetch(url))
             episode["title"] = parser.title
@@ -116,20 +129,27 @@ def convert_to_epub(
             if episode["id"] not in ignored_episode_ids
         ]
 
-    print(f"Download is complete! (new: {downloaded_count}, skipped: {skipped_count})")
+    print(f"Done: {downloaded_count} downloaded, {skipped_count} skipped (up to date).")
 
     write_epub(output, title, author, timestamp, chapters, new_metadata, images)
     print(f"{'Updated' if exists else 'Created'} {output}.")
 
 
-def check_metadata(old: Metadata, new: Metadata) -> str | None:
-    """既存の EPUB と異なる設定で更新しようとしている場合はその内容を返す"""
+def check_metadata(old: Metadata, new: Metadata, output: str):
+    """既存の EPUB と異なる設定で更新しようとしている場合は ConvertError を送出する"""
     if old["novel_id"] != new["novel_id"]:
-        return f"the novel_id differs from metadata: {old['novel_id']}"
-    for key in METADATA_FLAGS:
-        if old.get(key, False) != new[key]:
-            return f"the {key} value differs from metadata: {old.get(key, False)}"
-    return None
+        raise ConvertError(
+            f"cannot update {output}: it contains a different novel ({old['novel_id']}); "
+            "specify another output file with -o"
+        )
+    for key, (option, value_with_option) in METADATA_OPTIONS.items():
+        old_value = old.get(key, False)
+        if old_value != new[key]:
+            created = "with" if old_value == value_with_option else "without"
+            raise ConvertError(
+                f"cannot update {output}: it was created {created} {option}; "
+                "use the same options or specify another output file with -o"
+            )
 
 
 def fetch_index(
