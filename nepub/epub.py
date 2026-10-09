@@ -84,10 +84,33 @@ def write_epub(
     """
     episodes = [episode for chapter in chapters for episode in chapter["episodes"]]
     reused_episodes = [episode for episode in episodes if not episode["fetched"]]
-    # 同じ挿絵が複数のエピソードで使われることがあるので ID で重複を除く
-    manifest_images: list[MetadataImage] = []
-    image_ids: set[str] = set()
 
+    # 書き込む本文 (エピソード ID -> XHTML) と挿絵 (画像 ID -> (情報, データ)) を集める
+    # 同じ挿絵が複数のエピソードで使われることがあるので画像 ID で重複を除く
+    texts: dict[str, str | bytes] = {}
+    image_files: dict[str, tuple[MetadataImage, bytes]] = {}
+    for episode in episodes:
+        if episode["fetched"]:
+            texts[episode["id"]] = text(episode["title"], episode["paragraphs"])
+    for image in images:
+        image_files.setdefault(image["id"], (image, image["data"]))
+    # 今回ダウンロードしていないエピソード (更新がない / 取得範囲外) は、
+    # 更新前の EPUB (path) に入っている本文と挿絵をそのまま使う
+    if reused_episodes:
+        with zipfile.ZipFile(path, "r") as old_zf:
+            for episode in reused_episodes:
+                # 本文は変換済みの XHTML をそのままコピーする
+                texts[episode["id"]] = old_zf.read(_text_path(episode["id"]))
+                # そのエピソードが使っている挿絵は metadata に記録されている
+                # ダウンロードした挿絵や、他のエピソードで集めた挿絵と同じものは読み込まない
+                for old_image in metadata["episodes"][episode["id"]]["images"]:
+                    if old_image["id"] not in image_files:
+                        data = old_zf.read(_image_path(old_image["name"]))
+                        image_files[old_image["id"]] = (old_image, data)
+    manifest_images = [image for image, _ in image_files.values()]
+
+    # 一時ファイルに zip を書き、全部書き終わったら path と差し替える
+    # (途中で失敗しても path の既存ファイルは壊れない)
     with (
         _replace_on_success(path) as tmp_file,
         zipfile.ZipFile(
@@ -97,29 +120,10 @@ def write_epub(
         zf.writestr(
             "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
         )
-        for image in images:
-            if image["id"] not in image_ids:
-                image_ids.add(image["id"])
-                manifest_images.append(image)
-                zf.writestr(_image_path(image["name"]), image["data"])
+        for image_info, data in image_files.values():
+            zf.writestr(_image_path(image_info["name"]), data)
         for episode in episodes:
-            if episode["fetched"]:
-                zf.writestr(
-                    _text_path(episode["id"]),
-                    text(episode["title"], episode["paragraphs"]),
-                )
-        if reused_episodes:
-            with zipfile.ZipFile(path, "r") as old_zf:
-                for episode in reused_episodes:
-                    for old_image in metadata["episodes"][episode["id"]]["images"]:
-                        if old_image["id"] not in image_ids:
-                            image_ids.add(old_image["id"])
-                            manifest_images.append(old_image)
-                            name = _image_path(old_image["name"])
-                            zf.writestr(name, old_zf.read(name))
-                for episode in reused_episodes:
-                    name = _text_path(episode["id"])
-                    zf.writestr(name, old_zf.read(name))
+            zf.writestr(_text_path(episode["id"]), texts[episode["id"]])
         zf.writestr("META-INF/container.xml", container())
         zf.writestr("src/style.css", style())
         zf.writestr(
@@ -146,7 +150,14 @@ def _safe_name(name: str) -> str:
 
 @contextmanager
 def _replace_on_success(path: str) -> Iterator[IO[bytes]]:
-    """一時ファイルに書き込み、正常に終わった場合だけ path を置き換える"""
+    """一時ファイルに書き込み、正常に終わった場合だけ path を置き換える
+
+    with ブロックには一時ファイルが渡される。
+    ブロックが正常に終われば一時ファイルで path を置き換え、
+    例外が起きた場合は一時ファイルを削除して例外をそのまま投げ直す。
+    """
+    # os.replace は別のドライブには移動できないので path と同じフォルダに作る
+    # 閉じたあとに os.replace したいので自動削除はしない (delete=False)
     tmp_file = tempfile.NamedTemporaryFile(
         dir=os.path.dirname(os.path.abspath(path)),
         prefix=f"{os.path.basename(path)}.",
@@ -154,9 +165,14 @@ def _replace_on_success(path: str) -> Iterator[IO[bytes]]:
         delete=False,
     )
     try:
+        # with を抜けると一時ファイルが閉じられる
+        # (Windows では開いたままだと os.replace / os.remove できない)
         with tmp_file:
+            # ここで呼び出し側の with ブロックが実行される
             yield tmp_file
+        # 正常終了: 既存ファイルがあっても 1 回の操作で上書きする
         os.replace(tmp_file.name, path)
     except BaseException:
+        # 失敗 (Ctrl+C による中断も含む): 一時ファイルだけ消して path には触らない
         os.remove(tmp_file.name)
         raise
