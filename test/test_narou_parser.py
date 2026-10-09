@@ -70,6 +70,18 @@ class TestNarouEpisodeParser(TestCase):
             get_image.call_args[0][0],
         )
 
+    @patch("nepub.parser.narou.get_image")
+    def test_narou_episode_parser_image_other_host(self, get_image):
+        # mitemin.net 以外のホストの画像はダウンロードしない
+        parser = NarouEpisodeParser(include_images=True)
+        with self.assertRaisesRegex(Exception, "^img_src が想定しない形式です"):
+            parser.feed(
+                """
+                <p id="L1"><img src="//12345xmitemin.net/userpageimage/viewimagebig/icode/i12345/" alt="test_alt" /></p>
+                """
+            )
+        get_image.assert_not_called()
+
     def test_narou_episode_parser_tcy(self):
         parser = NarouEpisodeParser(convert_tcy=True)
         parser.feed(

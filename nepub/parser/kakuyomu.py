@@ -16,6 +16,8 @@ class KakuyomuEpisodeParser(NarouEpisodeParser):
 
 
 class KakuyomuIndexParser(HTMLParser):
+    EPISODE_ID_PATTERN = re.compile(r"[1-9][0-9]*")
+
     def reset(self):
         super().reset()
         self.title = ""
@@ -58,9 +60,13 @@ class KakuyomuIndexParser(HTMLParser):
                 episode_refs = toc_chapter["episodeUnions"]
                 for episode_ref in episode_refs:
                     episode = state[episode_ref["__ref"]]
+                    if not self.EPISODE_ID_PATTERN.fullmatch(episode["id"]):
+                        raise Exception(
+                            f"episode_id が認識できませんでした: {episode['id']}"
+                        )
                     self.chapters[-1]["episodes"].append(
                         {
-                            "id": html.escape(episode["id"]).strip(),
+                            "id": episode["id"],
                             "title": "",
                             "created_at": html.escape(episode["publishedAt"]).strip(),
                             # 更新日が分からないので作成日と同じ値を入れておく
