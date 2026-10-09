@@ -1,11 +1,16 @@
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 from nepub.parser.kakuyomu import KakuyomuEpisodeParser, KakuyomuIndexParser
 from nepub.parser.narou import NarouEpisodeParser, NarouIndexParser
 
 IndexParser = NarouIndexParser | KakuyomuIndexParser
+
+
+class EpisodeParserFactory(Protocol):
+    def __call__(self, *, illustration: bool, tcy: bool) -> NarouEpisodeParser: ...
 
 
 @dataclass(frozen=True)
@@ -18,8 +23,7 @@ class Site:
     episode_url_template: str
     supports_illustration: bool
     new_index_parser: Callable[[], IndexParser]
-    # (illustration, tcy) を受け取ってパーサーを作る
-    new_episode_parser: Callable[[bool, bool], NarouEpisodeParser]
+    new_episode_parser: EpisodeParserFactory
 
     def index_url(self, novel_id: str, page: str) -> str:
         return self.index_url_template.format(novel_id=novel_id, page=page)
@@ -37,7 +41,9 @@ NAROU = Site(
     episode_url_template="https://ncode.syosetu.com/{novel_id}/{episode_id}/",
     supports_illustration=True,
     new_index_parser=NarouIndexParser,
-    new_episode_parser=lambda illustration, tcy: NarouEpisodeParser(illustration, tcy),
+    new_episode_parser=lambda *, illustration, tcy: NarouEpisodeParser(
+        include_images=illustration, convert_tcy=tcy
+    ),
 )
 
 KAKUYOMU = Site(
@@ -48,5 +54,7 @@ KAKUYOMU = Site(
     episode_url_template="https://kakuyomu.jp/works/{novel_id}/episodes/{episode_id}",
     supports_illustration=False,
     new_index_parser=KakuyomuIndexParser,
-    new_episode_parser=lambda illustration, tcy: KakuyomuEpisodeParser(tcy),
+    new_episode_parser=lambda *, illustration, tcy: KakuyomuEpisodeParser(
+        convert_tcy=tcy
+    ),
 )

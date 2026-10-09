@@ -1,16 +1,12 @@
 import datetime
 import os
-from collections.abc import Callable
 from typing import Literal
 
 from nepub.epub import read_metadata, write_epub
-from nepub.http import get, throttle
+from nepub.http import Fetch, get, throttle
 from nepub.site import KAKUYOMU, NAROU, Site
 from nepub.type import Chapter, Episode, Image, Metadata, MetadataEpisode
 from nepub.util import range_to_episode_nums
-
-# URL を受け取って HTML を返す関数
-Fetch = Callable[[str], str]
 
 # 既存の EPUB と一致していないと更新できない設定
 METADATA_FLAGS: tuple[Literal["kakuyomu", "illustration", "tcy"], ...] = (
@@ -22,6 +18,7 @@ METADATA_FLAGS: tuple[Literal["kakuyomu", "illustration", "tcy"], ...] = (
 
 def convert_to_epub(
     novel_id: str,
+    *,
     illustration: bool,
     tcy: bool,
     my_range: str | None,
@@ -101,7 +98,7 @@ def convert_to_epub(
             ignored_episode_ids.add(episode["id"])
         else:
             print(f"Downloading {progress}")
-            parser = site.new_episode_parser(illustration, tcy)
+            parser = site.new_episode_parser(illustration=illustration, tcy=tcy)
             parser.feed(fetch(url))
             episode["title"] = parser.title
             episode["paragraphs"] = parser.paragraphs

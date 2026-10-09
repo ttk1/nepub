@@ -39,11 +39,11 @@ def main():
         output = f"{args.novel_id}.epub"
     convert_to_epub(
         args.novel_id,
-        args.illustration,
-        not args.no_tcy,
-        args.range,
-        output,
-        args.kakuyomu,
+        illustration=args.illustration,
+        tcy=not args.no_tcy,
+        my_range=args.range,
+        output=output,
+        kakuyomu=args.kakuyomu,
     )
 
 

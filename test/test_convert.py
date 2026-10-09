@@ -113,7 +113,13 @@ class TestConvert(TestCase):
         out = io.StringIO()
         with redirect_stdout(out):
             convert_to_epub(
-                novel_id, illustration, tcy, my_range, self.output, kakuyomu, web.get
+                novel_id,
+                illustration=illustration,
+                tcy=tcy,
+                my_range=my_range,
+                output=self.output,
+                kakuyomu=kakuyomu,
+                fetch=web.get,
             )
         return out.getvalue().splitlines()
 
@@ -327,7 +333,7 @@ class TestConvert(TestCase):
         self.assertEqual([], web.requested)
 
     @patch("nepub.parser.narou.get_image")
-    def test_unsafe_name_in_metadata(self, get_image):
+    def test_unsafe_image_in_metadata(self, get_image):
         get_image.return_value = {
             "id": "0123456789abcdef0123456789abcdef",
             "name": "0123456789abcdef0123456789abcdef.png",
@@ -339,28 +345,45 @@ class TestConvert(TestCase):
             "タイトル1",
             '<img src="//1.mitemin.net/userpageimage/viewimagebig/icode/i1/" alt="挿絵">',
         )
-        self.convert(FakeWeb(pages), illustration=True)
+        updated_pages = {**pages, **narou_site(ep2_updated="2024/02/01 00:00")}
+        updated_pages[f"{EPISODE_URL}1/"] = pages[f"{EPISODE_URL}1/"]
 
-        # 既存の EPUB の metadata.json に不正な画像ファイル名を仕込む
+        # 既存の EPUB の metadata.json に仕込まれた不正な挿絵の情報
+        cases = [
+            ("name", "../../evil.png", "ファイル名に使えない"),
+            ("id", 'x" onload="evil', "ファイル名に使えない"),
+            ("type", "text/html", "画像の形式"),
+        ]
+        for key, value, message in cases:
+            with self.subTest(key=key):
+                if os.path.exists(self.output):
+                    os.remove(self.output)
+                self.convert(FakeWeb(pages), illustration=True)
+                self.tamper_image_metadata(episode_id="1", key=key, value=value)
+                with open(self.output, "rb") as f:
+                    before = f.read()
+
+                # 挿絵のある 1 話を元のファイルから引き継ぐ更新を行う
+                with self.assertRaisesRegex(ValueError, message):
+                    self.convert(FakeWeb(updated_pages), illustration=True)
+
+                # 元のファイルはそのまま残り、一時ファイルも残らない
+                with open(self.output, "rb") as f:
+                    self.assertEqual(before, f.read())
+                self.assertEqual(
+                    ["novel.epub"], os.listdir(os.path.dirname(self.output))
+                )
+
+    def tamper_image_metadata(self, episode_id: str, key: str, value: str):
+        """既存の EPUB の metadata.json にあるエピソードの挿絵の情報を書き換える"""
         with zipfile.ZipFile(self.output) as zf:
             entries = {name: zf.read(name) for name in zf.namelist()}
         metadata = json.loads(entries["src/metadata.json"])
-        metadata["episodes"]["1"]["images"][0]["name"] = "../../evil.png"
+        metadata["episodes"][episode_id]["images"][0][key] = value
         entries["src/metadata.json"] = json.dumps(metadata).encode("utf-8")
         with zipfile.ZipFile(self.output, "w") as zf:
             for name, data in entries.items():
                 zf.writestr(name, data)
-        with open(self.output, "rb") as f:
-            before = f.read()
-
-        pages.update(narou_site(ep2_updated="2024/02/01 00:00"))
-        with self.assertRaisesRegex(ValueError, "ファイル名に使えない"):
-            self.convert(FakeWeb(pages), illustration=True)
-
-        # 元のファイルはそのまま残り、一時ファイルも残らない
-        with open(self.output, "rb") as f:
-            self.assertEqual(before, f.read())
-        self.assertEqual(["novel.epub"], os.listdir(os.path.dirname(self.output)))
 
     def test_kakuyomu_with_illustration(self):
         web = FakeWeb({})
@@ -440,7 +463,15 @@ class TestConvertKakuyomu(TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             output = os.path.join(tmp_dir, "novel.epub")
             with redirect_stdout(io.StringIO()):
-                convert_to_epub(work_id, False, False, None, output, True, web.get)
+                convert_to_epub(
+                    work_id,
+                    illustration=False,
+                    tcy=False,
+                    my_range=None,
+                    output=output,
+                    kakuyomu=True,
+                    fetch=web.get,
+                )
             with zipfile.ZipFile(output) as zf:
                 metadata = json.loads(zf.read("src/metadata.json"))
                 text = zf.read("src/text/12.xhtml").decode("utf-8")

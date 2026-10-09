@@ -8,6 +8,9 @@ from nepub.type import Image
 
 __version__ = version("nepub")
 
+# URL を受け取って HTML を返す関数
+Fetch = Callable[[str], str]
+
 
 def get(url: str):
     headers = {"User-agent": f"nepub/{__version__}"}
@@ -16,7 +19,7 @@ def get(url: str):
         return res.read().decode("utf-8")
 
 
-def throttle(fetch: Callable[[str], str], interval: float) -> Callable[[str], str]:
+def throttle(fetch: Fetch, interval: float) -> Fetch:
     """2 回目以降の呼び出しの前に interval 秒待つようにする (サーバーに負荷をかけないため)"""
     called = False
 

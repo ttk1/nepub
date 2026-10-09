@@ -25,6 +25,8 @@ template_text = env.get_template("text.xhtml")
 # EPUB 内のファイル名に使ってよい文字列 (エピソード ID, 画像ファイル名)
 # パストラバーサルやテンプレートへの埋め込みで問題が起きないよう英数字等に限る
 SAFE_NAME_PATTERN = re.compile(r"[0-9A-Za-z_-]+(\.[0-9A-Za-z]+)?")
+# EPUB に含めてよい挿絵の形式
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/gif")
 
 
 def content(
@@ -107,7 +109,7 @@ def write_epub(
                     if old_image["id"] not in image_files:
                         data = old_zf.read(_image_path(old_image["name"]))
                         image_files[old_image["id"]] = (old_image, data)
-    manifest_images = [image for image, _ in image_files.values()]
+    manifest_images = [_check_image(image) for image, _ in image_files.values()]
 
     # 一時ファイルに zip を書き、全部書き終わったら path と差し替える
     # (途中で失敗しても path の既存ファイルは壊れない)
@@ -140,6 +142,15 @@ def _text_path(episode_id: str) -> str:
 
 def _image_path(image_name: str) -> str:
     return f"src/image/{_safe_name(image_name)}"
+
+
+def _check_image(image: MetadataImage) -> MetadataImage:
+    """content.opf にそのまま埋め込まれる挿絵の情報を検証する"""
+    _safe_name(image["id"])
+    _safe_name(image["name"])
+    if image["type"] not in IMAGE_TYPES:
+        raise ValueError(f"EPUB に含められない画像の形式です: {image['type']}")
+    return image
 
 
 def _safe_name(name: str) -> str:

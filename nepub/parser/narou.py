@@ -10,7 +10,7 @@ from nepub.util import tcy
 class NarouEpisodeParser(HTMLParser):
     PARAGRAPH_ID_PATTERN = re.compile(r"L[1-9][0-9]*")
     IMG_SRC_PATTERN = re.compile(
-        r"//[1-9][0-9]*.mitemin.net/userpageimage/viewimagebig/icode/i[1-9][0-9]*/"
+        r"//[1-9][0-9]*\.mitemin\.net/userpageimage/viewimagebig/icode/i[1-9][0-9]*/"
     )
     EPISODE_TITLE_CLASS = "p-novel__title"
     # 終了タグを持たない要素 (<br> のように閉じられない場合があるためスタックに積まない)
