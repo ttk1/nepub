@@ -80,6 +80,20 @@ class FakeWeb:
 
 
 class TestConvert(TestCase):
+    """EPUB を更新する際、各エピソードは次のパターンに分かれる
+
+    | 元のファイル | range  | 更新 | 動作                       | テスト                  |
+    |--------------|--------|------|----------------------------|-------------------------|
+    | なし         | 範囲内 | -    | 新しく取得                 | test_update, test_range |
+    | なし         | 範囲外 | -    | 含めない                   | test_range              |
+    | あり         | 範囲外 | なし | 元のファイルのものを引き継ぐ | test_range              |
+    | あり         | 範囲外 | あり | 元のファイルのものを引き継ぐ | test_range              |
+    | あり         | 範囲内 | あり | 新しく取得                 | test_update             |
+    | あり         | 範囲内 | なし | 元のファイルのものを引き継ぐ | test_update             |
+
+    range を指定しない場合は全話が範囲内になる。
+    """
+
     def setUp(self):
         tmp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(tmp_dir.cleanup)
@@ -202,13 +216,16 @@ class TestConvert(TestCase):
         )
 
     def test_update(self):
+        """range を指定せずに更新する (全話が範囲内)"""
+        # 1 回目: 1-4 話で作成
         self.convert(FakeWeb(narou_site()))
         text1 = self.read("src/text/1.xhtml")
 
+        # 2 回目: 2 話を更新ありにし、5 話を追加して更新
         web = FakeWeb(narou_site(ep2_updated="2024/02/01 00:00", with_ep5=True))
         lines = self.convert(web)
 
-        # 更新された話と新しい話だけをダウンロードする
+        # 更新された話 (2) と新しい話 (5) だけをダウンロードする
         self.assertEqual(
             [INDEX_URL + "1", INDEX_URL + "2", f"{EPISODE_URL}2/", f"{EPISODE_URL}5/"],
             web.requested,
@@ -231,8 +248,11 @@ class TestConvert(TestCase):
             ],
             lines,
         )
+        # [あり・範囲内・更新なし] 1, 3, 4 話: 元のファイルのものを引き継ぐ
         self.assertEqual(text1, self.read("src/text/1.xhtml"))
+        # [あり・範囲内・更新あり] 2 話: 新しく取得する
         self.assertIn("<p>本文2（改稿）</p>", self.read("src/text/2.xhtml"))
+        # [なし・範囲内] 5 話: 新しく取得して追加する
         self.assertEqual(["1", "2", "3", "4", "5"], self.spine())
         self.assertEqual(("5", "タイトル5"), self.nav()[-1])
         self.assertEqual(
@@ -242,8 +262,12 @@ class TestConvert(TestCase):
         self.assertEqual(["novel.epub"], os.listdir(os.path.dirname(self.output)))
 
     def test_range(self):
+        """range を指定して作成・更新する"""
+        # 1 回目: range=2-3 で作成
         web = FakeWeb(narou_site())
         self.convert(web, my_range="2-3")
+        # [なし・範囲内] 2, 3 話: 新しく取得する
+        # [なし・範囲外] 1, 4 話: 含めない
         self.assertEqual(
             [INDEX_URL + "1", INDEX_URL + "2", f"{EPISODE_URL}2/", f"{EPISODE_URL}3/"],
             web.requested,
@@ -254,15 +278,23 @@ class TestConvert(TestCase):
         )
         self.assertEqual(["2", "3"], list(self.metadata()["episodes"]))
 
-        # 範囲外の既存の話はそのまま残し、範囲外の新しい話は含めない
+        # 2 回目: 2 話を更新ありにして range=4 で更新
+        web = FakeWeb(narou_site(ep2_updated="2024/02/01 00:00"))
         lines = self.convert(web, my_range="4")
+        # [なし・範囲内] 4 話だけを新しく取得する
         self.assertEqual(
             [INDEX_URL + "1", INDEX_URL + "2", f"{EPISODE_URL}4/"], web.requested
         )
         self.assertIn("Download is complete! (new: 1, skipped: 0)", lines)
+        # [なし・範囲外] 1 話: 引き続き含めない
         self.assertEqual(["2", "3", "4"], self.spine())
         self.assertEqual(["2", "3", "4"], list(self.metadata()["episodes"]))
+        # [あり・範囲外・更新なし] 3 話: 元のファイルのものを引き継ぐ
         self.assertIn("<p>本文3</p>", self.read("src/text/3.xhtml"))
+        # [あり・範囲外・更新あり] 2 話: 更新があっても取得せず元のファイルのものを引き継ぐ
+        # (metadata も古いままなので、次に範囲内で更新したときに取得される)
+        self.assertIn("<p>本文2</p>", self.read("src/text/2.xhtml"))
+        self.assertEqual("", self.metadata()["episodes"]["2"]["updated_at"])
 
     def test_options_differ_from_metadata(self):
         web = FakeWeb(narou_site())
