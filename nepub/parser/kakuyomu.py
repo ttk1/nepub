@@ -44,7 +44,7 @@ class KakuyomuIndexParser(HTMLParser):
                 state[work["author"]["__ref"]]["activityName"]
             ).strip()
 
-            tocs = work["tableOfContents"]
+            tocs = work["tableOfContentsV2"]
             for toc in tocs:
                 toc_chapter_ref = toc["__ref"]
                 toc_chapter = state[toc_chapter_ref]

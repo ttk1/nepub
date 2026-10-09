@@ -63,7 +63,7 @@ class TestKakuyomuIndexParser(TestCase):
                                     "author": {
                                         "__ref": "UserAccount:user1"
                                     },
-                                    "tableOfContents": [
+                                    "tableOfContentsV2": [
                                         {
                                             "__ref": "TableOfContentsChapter:"
                                         }
@@ -146,7 +146,7 @@ class TestKakuyomuIndexParser(TestCase):
                                     "author": {
                                         "__ref": "UserAccount:user1"
                                     },
-                                    "tableOfContents": [
+                                    "tableOfContentsV2": [
                                         {
                                             "__ref": "TableOfContentsChapter:chapter1"
                                         },
