@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 
 from nepub.parser.kakuyomu import KakuyomuEpisodeParser, KakuyomuIndexParser
@@ -75,21 +76,21 @@ class TestKakuyomuIndexParser(TestCase):
                                 "TableOfContentsChapter:": {
                                     "episodeUnions": [
                                         {
-                                            "__ref": "Episode:epsode1"
+                                            "__ref": "Episode:10001"
                                         },
                                         {
-                                            "__ref": "Episode:epsode2"
+                                            "__ref": "Episode:10002"
                                         }
                                     ],
                                     "chapter": null
                                 },
-                                "Episode:epsode1": {
-                                    "id": "epsode1",
+                                "Episode:10001": {
+                                    "id": "10001",
                                     "title": "エピソード1",
                                     "publishedAt": "2000-01-01T00:00:00Z"
                                 },
-                                "Episode:epsode2": {
-                                    "id": "epsode2",
+                                "Episode:10002": {
+                                    "id": "10002",
                                     "title": "エピソード2",
                                     "publishedAt": "2000-01-02T00:00:00Z"
                                 }
@@ -108,7 +109,7 @@ class TestKakuyomuIndexParser(TestCase):
                     "name": "default",
                     "episodes": [
                         {
-                            "id": "epsode1",
+                            "id": "10001",
                             "title": "",
                             "created_at": "2000-01-01T00:00:00Z",
                             "updated_at": "2000-01-01T00:00:00Z",
@@ -116,7 +117,7 @@ class TestKakuyomuIndexParser(TestCase):
                             "fetched": False,
                         },
                         {
-                            "id": "epsode2",
+                            "id": "10002",
                             "title": "",
                             "created_at": "2000-01-02T00:00:00Z",
                             "updated_at": "2000-01-02T00:00:00Z",
@@ -161,10 +162,10 @@ class TestKakuyomuIndexParser(TestCase):
                                 "TableOfContentsChapter:chapter1": {
                                     "episodeUnions": [
                                         {
-                                            "__ref": "Episode:epsode1"
+                                            "__ref": "Episode:10001"
                                         },
                                         {
-                                            "__ref": "Episode:epsode2"
+                                            "__ref": "Episode:10002"
                                         }
                                     ],
                                     "chapter": {
@@ -174,7 +175,7 @@ class TestKakuyomuIndexParser(TestCase):
                                 "TableOfContentsChapter:chapter2": {
                                     "episodeUnions": [
                                         {
-                                            "__ref": "Episode:epsode3"
+                                            "__ref": "Episode:10003"
                                         }
                                     ],
                                     "chapter": {
@@ -187,18 +188,18 @@ class TestKakuyomuIndexParser(TestCase):
                                 "Chapter:chapter2": {
                                     "title": "第2章"
                                 },
-                                "Episode:epsode1": {
-                                    "id": "epsode1",
+                                "Episode:10001": {
+                                    "id": "10001",
                                     "title": "エピソード1",
                                     "publishedAt": "2000-01-01T00:00:00Z"
                                 },
-                                "Episode:epsode2": {
-                                    "id": "epsode2",
+                                "Episode:10002": {
+                                    "id": "10002",
                                     "title": "エピソード2",
                                     "publishedAt": "2000-01-02T00:00:00Z"
                                 },
-                                "Episode:epsode3": {
-                                    "id": "epsode3",
+                                "Episode:10003": {
+                                    "id": "10003",
                                     "title": "エピソード3",
                                     "publishedAt": "2000-01-03T00:00:00Z"
                                 }
@@ -218,7 +219,7 @@ class TestKakuyomuIndexParser(TestCase):
                     "name": "第1章",
                     "episodes": [
                         {
-                            "id": "epsode1",
+                            "id": "10001",
                             "title": "",
                             "created_at": "2000-01-01T00:00:00Z",
                             "updated_at": "2000-01-01T00:00:00Z",
@@ -226,7 +227,7 @@ class TestKakuyomuIndexParser(TestCase):
                             "fetched": False,
                         },
                         {
-                            "id": "epsode2",
+                            "id": "10002",
                             "title": "",
                             "created_at": "2000-01-02T00:00:00Z",
                             "updated_at": "2000-01-02T00:00:00Z",
@@ -239,7 +240,7 @@ class TestKakuyomuIndexParser(TestCase):
                     "name": "第2章",
                     "episodes": [
                         {
-                            "id": "epsode3",
+                            "id": "10003",
                             "title": "",
                             "created_at": "2000-01-03T00:00:00Z",
                             "updated_at": "2000-01-03T00:00:00Z",
@@ -251,3 +252,25 @@ class TestKakuyomuIndexParser(TestCase):
             ],
             parser.chapters,
         )
+
+    def test_kakuyomu_index_parser_invalid_episode_id(self):
+        state = {
+            "Work:1": {
+                "title": "タイトル",
+                "author": {"__ref": "UserAccount:1"},
+                "tableOfContentsV2": [{"__ref": "TableOfContentsChapter:1"}],
+            },
+            "UserAccount:1": {"activityName": "作者"},
+            "TableOfContentsChapter:1": {
+                "chapter": None,
+                "episodeUnions": [{"__ref": "Episode:x"}],
+            },
+            "Episode:x": {"id": "../1", "publishedAt": "2000-01-01T00:00:00Z"},
+        }
+        next_data = {
+            "query": {"workId": "1"},
+            "props": {"pageProps": {"__APOLLO_STATE__": state}},
+        }
+        parser = KakuyomuIndexParser()
+        with self.assertRaisesRegex(Exception, "^episode_id が認識できませんでした"):
+            parser.feed(f'<script id="__NEXT_DATA__">{json.dumps(next_data)}</script>')

@@ -1,5 +1,7 @@
 import hashlib
+import time
 import urllib.request
+from collections.abc import Callable
 from importlib.metadata import version
 
 from nepub.type import Image
@@ -12,6 +14,20 @@ def get(url: str):
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=10) as res:
         return res.read().decode("utf-8")
+
+
+def throttle(fetch: Callable[[str], str], interval: float) -> Callable[[str], str]:
+    """2 回目以降の呼び出しの前に interval 秒待つようにする (サーバーに負荷をかけないため)"""
+    called = False
+
+    def throttled(url: str) -> str:
+        nonlocal called
+        if called:
+            time.sleep(interval)
+        called = True
+        return fetch(url)
+
+    return throttled
 
 
 def get_image(url: str) -> Image:
