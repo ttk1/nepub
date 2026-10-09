@@ -1,6 +1,6 @@
 [project]
 name = "nepub"
-version = "1.5.0"
+version = "1.6.0"
 description = "Small tool to convert Narou and Kakuyomu novels to vertically written EPUBs."
 readme = "README.md"
 authors = [{ name = "tama", email = "tama@ttk1.net" }]
