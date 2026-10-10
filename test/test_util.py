@@ -13,8 +13,14 @@ class TestUtil(TestCase):
             range_to_episode_nums("1,,2")
         with self.assertRaisesRegex(ValueError, "^invalid range: 1-"):
             range_to_episode_nums("1-")
+        with self.assertRaisesRegex(ValueError, "^invalid range: 10-5"):
+            range_to_episode_nums("10-5")
         with self.assertRaisesRegex(ValueError, "^range value is too large: 99999"):
             range_to_episode_nums("1-99999")
+        with self.assertRaisesRegex(ValueError, "^range value is too large: 99999"):
+            range_to_episode_nums("99999-100")
+        with self.assertRaisesRegex(ValueError, "^range value is too large: 99999"):
+            range_to_episode_nums("99999")
 
     def test_tcy_digits_before_space(self):
         cases = [

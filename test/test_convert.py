@@ -338,7 +338,9 @@ class TestConvert(TestCase):
         cases: list[tuple[dict[str, Any], str]] = [
             ({"novel_id": "n0000aa/../x"}, "invalid novel ID for Narou: n0000aa/../x"),
             ({"my_range": "1,,2"}, "invalid range: 1,,2"),
+            ({"my_range": "10-5"}, "invalid range: 10-5"),
             ({"my_range": "1-99999"}, "range value is too large: 99999"),
+            ({"my_range": "99999"}, "range value is too large: 99999"),
             (
                 {"illustration": True, "kakuyomu": True},
                 "the --illustration option is not supported for Kakuyomu",

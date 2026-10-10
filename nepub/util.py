@@ -121,11 +121,20 @@ def range_to_episode_nums(my_range: str):
     for r in my_range.split(","):
         if "-" in r:
             start, end = r.split("-")
-            if int(end) > 10_000:
+            start_num, end_num = int(start), int(end)
+            if start_num > 10_000:
                 # 安全のため値が大きすぎる場合はエラーにする
+                raise ValueError(f"range value is too large: {start} (max: 10000)")
+            if end_num > 10_000:
                 raise ValueError(f"range value is too large: {end} (max: 10000)")
-            for i in range(int(start), int(end) + 1):
+            if start_num > end_num:
+                raise ValueError(
+                    f"invalid range: {r} (start must be less than or equal to end)"
+                )
+            for i in range(start_num, end_num + 1):
                 episode_nums.add(str(i))
         else:
+            if int(r) > 10_000:
+                raise ValueError(f"range value is too large: {r} (max: 10000)")
             episode_nums.add(r)
     return episode_nums

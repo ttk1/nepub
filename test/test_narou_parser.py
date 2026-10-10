@@ -216,3 +216,8 @@ class TestNarouIndexParser(TestCase):
             ],
             parser.chapters,
         )
+
+    def test_narou_index_parser_span_before_episodes(self):
+        parser = NarouIndexParser()
+        parser.feed('<span title="some title">dummy</span>')
+        self.assertEqual([{"name": "default", "episodes": []}], parser.chapters)

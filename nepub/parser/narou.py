@@ -215,7 +215,7 @@ class NarouIndexParser(HTMLParser):
                         }
                     )
         # episode_updated_at
-        if tag == "span":
+        if tag == "span" and self.chapters and self.chapters[-1]["episodes"]:
             for attr in attrs:
                 if attr[0] == "title":
                     self.chapters[-1]["episodes"][-1]["updated_at"] = html.escape(
@@ -230,9 +230,10 @@ class NarouIndexParser(HTMLParser):
                 )
                 self._current_chapter = ""
             elif self._current_episode_created_at:
-                self.chapters[-1]["episodes"][-1]["created_at"] = html.escape(
-                    self._current_episode_created_at
-                ).strip()
+                if self.chapters and self.chapters[-1]["episodes"]:
+                    self.chapters[-1]["episodes"][-1]["created_at"] = html.escape(
+                        self._current_episode_created_at
+                    ).strip()
                 self._current_episode_created_at = ""
         # classes をスタックからおろす
         self._classes_stack.pop()
