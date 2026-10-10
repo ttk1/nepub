@@ -13,6 +13,8 @@ class TestUtil(TestCase):
             range_to_episode_nums("1,,2")
         with self.assertRaisesRegex(ValueError, "^invalid range: 1-"):
             range_to_episode_nums("1-")
+        with self.assertRaisesRegex(ValueError, "^invalid range: 3-1 "):
+            range_to_episode_nums("1,3-1")
         with self.assertRaisesRegex(ValueError, "^range value is too large: 99999"):
             range_to_episode_nums("1-99999")
 
